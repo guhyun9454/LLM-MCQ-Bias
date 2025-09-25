@@ -27,6 +27,8 @@ def parse_arguments():
     parser.add_argument("--eval_names", type=str, nargs='+', default=[],
                         help='eval tasks and settings')
     parser.add_argument("--mini", action='store_true')
+    parser.add_argument("--data_root", type=str, default=None,
+                        help="Root directory containing data_{task} folders (e.g., 'code' when running from repo root)")
     args = parser.parse_args()
 
     for eval_name in args.eval_names:
@@ -79,7 +81,8 @@ def prepare_eval(args, eval_name):
         option_ids = list('ABCDE')
         option_ids_header = list('ABCDE')
 
-    data_path = f'data_{task}'
+    data_root = args.data_root if args.data_root is not None else "."
+    data_path = os.path.join(data_root, f'data_{task}')
     subjects = sorted([f.split("_test.csv")[0]
                        for f in os.listdir(f'{data_path}/test') if "_test.csv" in f])
 
