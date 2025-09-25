@@ -38,6 +38,8 @@ def parse_arguments():
                         help='eval tasks and settings')
     parser.add_argument("--data_root", type=str, default=None,
                         help="Root directory containing data_{task} folders (e.g., 'code' when running from repo root)")
+    parser.add_argument("--ko", action='store_true',
+                        help="Use Korean CSV files (e.g., *_dev.ko.csv, *_test.ko.csv)")
     args = parser.parse_args()
 
     args.model_name = args.pretrained_model_path.split('/')[-1]
@@ -89,8 +91,12 @@ def prepare_eval(args, eval_name):
 
     data_root = args.data_root if args.data_root is not None else "."
     data_path = os.path.join(data_root, f'data_{task}')
-    subjects = sorted([f.split("_test.csv")[0]
-                       for f in os.listdir(f'{data_path}/test') if "_test.csv" in f])
+    test_suffix = "_test.ko.csv" if getattr(args, 'ko', False) else "_test.csv"
+    dev_suffix = "_dev.ko.csv" if getattr(args, 'ko', False) else "_dev.csv"
+    subjects = sorted([
+        f.split(test_suffix)[0]
+        for f in os.listdir(f'{data_path}/test') if f.endswith(test_suffix)
+    ])
 
     # sys_msg
     if 'mmlu' in task:
@@ -122,7 +128,7 @@ def prepare_eval(args, eval_name):
 
     # prepare_few_shot_samples
     def prepare_few_shot_samples(subject):
-        df = pd.read_csv(f'{data_path}/dev/{subject}_dev.csv', names=("Question", *option_ids_header, "Answer"), dtype=str)
+        df = pd.read_csv(f'{data_path}/dev/{subject}{dev_suffix}', names=("Question", *option_ids_header, "Answer"), dtype=str)
         if setting in ['noid']:
             few_shot_samples = df.apply(lambda x:
                 create_user_prompt(x["Question"], [x[e] for e in option_ids_header])
@@ -137,7 +143,7 @@ def prepare_eval(args, eval_name):
 
     # prepare_eval_samples
     def prepare_eval_samples(subject):
-        df = pd.read_csv(open(f'{data_path}/test/{subject}_test.csv'), names=("Question", *option_ids_header, "Answer"), dtype=str)
+        df = pd.read_csv(open(f'{data_path}/test/{subject}{test_suffix}'), names=("Question", *option_ids_header, "Answer"), dtype=str)
 
         if setting is not None and setting.startswith('move'):
             df = df.apply(lambda x: move_answer(x, moved_answer), axis=1)
