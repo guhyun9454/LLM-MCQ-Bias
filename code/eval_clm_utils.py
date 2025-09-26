@@ -40,6 +40,12 @@ def parse_arguments():
                         help="Root directory containing data_{task} folders (e.g., 'code' when running from repo root)")
     parser.add_argument("--ko", action='store_true',
                         help="Use Korean CSV files (e.g., *_dev.ko.csv, *_test.ko.csv)")
+    parser.add_argument("--prompt_lang", type=str, choices=['en', 'ko'], default='en',
+                        help="Language of the prompt template and labels (Question/Options/Answer)")
+    parser.add_argument("--option_ids4", type=str, default=None,
+                        help="Comma-separated option IDs for 4-choice tasks (e.g., 'A,B,C,D' or '가,나,다,라' or '1,2,3,4')")
+    parser.add_argument("--option_ids5", type=str, default=None,
+                        help="Comma-separated option IDs for 5-choice tasks (e.g., 'A,B,C,D,E' or '가,나,다,라,마' or '1,2,3,4,5')")
     args = parser.parse_args()
 
     args.model_name = args.pretrained_model_path.split('/')[-1]
@@ -83,11 +89,30 @@ def prepare_eval(args, eval_name):
     args.save_path = save_path
     os.makedirs(args.save_path, exist_ok=True)
 
-    option_ids = list('ABCD')
+    # Column headers in CSV are fixed as English letters
     option_ids_header = list('ABCD')
     if task in ['csqa']:
-        option_ids = list('ABCDE')
         option_ids_header = list('ABCDE')
+
+    # Determine display IDs used in prompts and evaluation
+    if task in ['csqa']:
+        default_ids = list('ABCDE')
+        if getattr(args, 'option_ids5', None):
+            user_ids = [e.strip() for e in args.option_ids5.split(',')]
+            if len(user_ids) != 5:
+                raise ValueError(f"--option_ids5 must contain 5 items, got {len(user_ids)}")
+            option_ids = user_ids
+        else:
+            option_ids = default_ids
+    else:
+        default_ids = list('ABCD')
+        if getattr(args, 'option_ids4', None):
+            user_ids = [e.strip() for e in args.option_ids4.split(',')]
+            if len(user_ids) != 4:
+                raise ValueError(f"--option_ids4 must contain 4 items, got {len(user_ids)}")
+            option_ids = user_ids
+        else:
+            option_ids = default_ids
 
     data_root = args.data_root if args.data_root is not None else "."
     data_path = os.path.join(data_root, f'data_{task}')
@@ -98,32 +123,40 @@ def prepare_eval(args, eval_name):
         for f in os.listdir(f'{data_path}/test') if f.endswith(test_suffix)
     ])
 
-    # sys_msg
-    if 'mmlu' in task:
-        sys_msg = 'The following are multiple choice questions about {}.'
-    else: # task in ['arc', 'tqa']
-        sys_msg = 'The following are multiple choice questions.'
-
-    sys_msg += ' You should directly answer the question by choosing the correct option.'
+    # sys_msg and labels
+    if getattr(args, 'prompt_lang', 'en') == 'ko':
+        if 'mmlu' in task:
+            sys_msg = '다음은 {}에 관한 객관식 문제입니다.'
+        else:  # task in ['arc', 'tqa', 'csqa']
+            sys_msg = '다음은 객관식 문제입니다.'
+        sys_msg += ' 정답 선택지를 직접 선택해 답하세요.'
+        q_label, o_label, a_label = '질문', '선지', '정답'
+    else:
+        if 'mmlu' in task:
+            sys_msg = 'The following are multiple choice questions about {}.'
+        else:  # task in ['arc', 'tqa', 'csqa']
+            sys_msg = 'The following are multiple choice questions.'
+        sys_msg += ' You should directly answer the question by choosing the correct option.'
+        q_label, o_label, a_label = 'Question', 'Options', 'Answer'
 
     # create_user_prompt
     def create_user_prompt(question: str, options: List[str]):
         if setting in ['noid']:
-            user_prompt = f"Question: {question.strip()}\nOptions:\n" + \
+            user_prompt = f"{q_label}: {question.strip()}\n{o_label}:\n" + \
                 "\n".join([f"{answer}".strip()
                            for option_id, answer in zip(option_ids, options)]) + \
-                "\nAnswer:"
+                f"\n{a_label}:"
         elif setting in ['shuffle_both']:
             shuffled_option_ids, shuffled_options = shuffle_options_with_ids(option_ids, options)
-            user_prompt = f"Question: {question.strip()}\nOptions:\n" + \
+            user_prompt = f"{q_label}: {question.strip()}\n{o_label}:\n" + \
                 "\n".join([f"{option_id}. {answer}".strip()
                            for option_id, answer in zip(shuffled_option_ids, shuffled_options)]) + \
-                "\nAnswer:"
+                f"\n{a_label}:"
         else:
-            user_prompt = f"Question: {question.strip()}\nOptions:\n" + \
+            user_prompt = f"{q_label}: {question.strip()}\n{o_label}:\n" + \
                 "\n".join([f"{option_id}. {answer}".strip()
                            for option_id, answer in zip(option_ids, options)]) + \
-                "\nAnswer:"
+                f"\n{a_label}:"
         return user_prompt
 
     # prepare_few_shot_samples

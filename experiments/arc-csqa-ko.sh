@@ -22,5 +22,8 @@ for MODEL in "${MODELS[@]}"; do
     --pretrained_model_path "$MODEL" \
     --eval_names "${EVAL_NAMES[@]}" \
     --data_root "$DATA_ROOT" \
-    --ko
+    --ko \
+    --prompt_lang ko \
+    --option_ids4 "가,나,다,라" \
+    --option_ids5 "가,나,다,라,마"
 done
