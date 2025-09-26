@@ -48,17 +48,22 @@ def main():
     if len(args.eval_names) == 0:
         exit()
 
-    toker = AutoTokenizer.from_pretrained(
-        args.pretrained_model_path, use_fast=False,
-        add_bos_token=False, add_eos_token=False,
-    )
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.pretrained_model_path,
-        device_map='auto',
-        use_safetensors=True,
-        torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
-    )
+    try:
+        toker = AutoTokenizer.from_pretrained(
+            args.pretrained_model_path, use_fast=False,
+            add_bos_token=False, add_eos_token=False,
+            trust_remote_code=True,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.pretrained_model_path,
+            device_map='auto',
+            use_safetensors=True,
+            torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
+            trust_remote_code=True,
+        )
+    except Exception as e:
+        logger.exception(f"Failed to load model/tokenizer for {args.pretrained_model_path}: {e}")
+        return
     logging_cuda_memory_usage()
 
     for eval_name in args.eval_names[::1]:

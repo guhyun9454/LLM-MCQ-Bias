@@ -216,7 +216,12 @@ def prepare_eval(args, eval_name):
 
 
 def prepare_eval_fn_base(model, toker, few_shot_samples, num_few_shot, option_ids):
-    bpe_has_space_prefix = toker(': A').input_ids[-1] != toker(':A').input_ids[-1]
+    try:
+        id_space = toker.encode(': A', add_special_tokens=False)[-1]
+        id_nospace = toker.encode(':A', add_special_tokens=False)[-1]
+        bpe_has_space_prefix = id_space != id_nospace
+    except Exception:
+        bpe_has_space_prefix = True
 
     def eval_fn(sample, rng: random.Random):
         idx, (input, options, ideal) = sample
@@ -236,8 +241,8 @@ def prepare_eval_fn_base(model, toker, few_shot_samples, num_few_shot, option_id
                 input_ids=input_ids,
             ).logits[:, -1].view(-1)
 
-        option_indices = [toker(f': {e}').input_ids[-1] for e in option_ids] + \
-            [toker(f':{e}').input_ids[-1] for e in option_ids]
+        option_indices = [toker.encode(f': {e}', add_special_tokens=False)[-1] for e in option_ids] + \
+            [toker.encode(f':{e}', add_special_tokens=False)[-1] for e in option_ids]
         probs = F.softmax(
             logits[..., option_indices], dim=-1
         ).detach().cpu().to(torch.float32).numpy()
@@ -263,7 +268,12 @@ def prepare_eval_fn_base(model, toker, few_shot_samples, num_few_shot, option_id
 
 def prepare_eval_fn_noid(model, toker, few_shot_samples, num_few_shot, option_ids):
     toker.padding_side = 'right'
-    bpe_has_space_prefix = toker(': A').input_ids[-1] != toker(':A').input_ids[-1]
+    try:
+        id_space = toker.encode(': A', add_special_tokens=False)[-1]
+        id_nospace = toker.encode(':A', add_special_tokens=False)[-1]
+        bpe_has_space_prefix = id_space != id_nospace
+    except Exception:
+        bpe_has_space_prefix = True
 
     def eval_fn(sample, rng: random.Random):
         idx, (input, options, ideal) = sample
@@ -321,7 +331,12 @@ def prepare_eval_fn_noid(model, toker, few_shot_samples, num_few_shot, option_id
 
 def prepare_eval_fn_perm(model, toker, few_shot_samples, num_few_shot, option_ids):
     toker.padding_side = 'left'
-    bpe_has_space_prefix = toker(': A').input_ids[-1] != toker(':A').input_ids[-1]
+    try:
+        id_space = toker.encode(': A', add_special_tokens=False)[-1]
+        id_nospace = toker.encode(':A', add_special_tokens=False)[-1]
+        bpe_has_space_prefix = id_space != id_nospace
+    except Exception:
+        bpe_has_space_prefix = True
 
     def eval_fn(sample, rng: random.Random):
         idx, (probing_inputs, options, ideal) = sample
@@ -348,8 +363,8 @@ def prepare_eval_fn_perm(model, toker, few_shot_samples, num_few_shot, option_id
                     input_ids=input_ids,
                 ).logits[:, -1]
 
-            option_indices = [toker(f': {e}').input_ids[-1] for e in option_ids] + \
-                [toker(f':{e}').input_ids[-1] for e in option_ids]
+            option_indices = [toker.encode(f': {e}', add_special_tokens=False)[-1] for e in option_ids] + \
+                [toker.encode(f':{e}', add_special_tokens=False)[-1] for e in option_ids]
             probs = F.softmax(
                 logits[..., option_indices], dim=-1,
             ).detach().to(torch.float32).cpu().numpy()
