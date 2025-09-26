@@ -11,6 +11,7 @@ transformers>=4.33
 accelerate>=0.21
 safetensors>=0.3.1
 sentencepiece>=0.1.99
+protobuf
 
 # GPU monitoring (optional but used)
 pynvml>=11.4.1
