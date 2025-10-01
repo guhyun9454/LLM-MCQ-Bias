@@ -50,7 +50,7 @@ def main():
 
     try:
         toker = AutoTokenizer.from_pretrained(
-            args.pretrained_model_path, use_fast=False,
+            args.pretrained_model_path, 
             add_bos_token=False, add_eos_token=False,
             trust_remote_code=True,
         )
