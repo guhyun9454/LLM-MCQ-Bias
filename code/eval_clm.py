@@ -16,7 +16,7 @@ from utils import (
     patch_open,
 )
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerFast
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import BitsAndBytesConfig
 
 import gc
@@ -49,19 +49,11 @@ def main():
         exit()
 
     try:
-        try:
-            toker = AutoTokenizer.from_pretrained(
-                args.pretrained_model_path,
-                use_fast=True,
-                add_bos_token=False, add_eos_token=False,
-                trust_remote_code=True,
-            )
-        except Exception as e_tok:
-            logger.warning(f"AutoTokenizer fast load failed: {e_tok}. Falling back to PreTrainedTokenizerFast.")
-            toker = PreTrainedTokenizerFast.from_pretrained(
-                args.pretrained_model_path,
-                trust_remote_code=True,
-            )
+        toker = AutoTokenizer.from_pretrained(
+            args.pretrained_model_path, 
+            add_bos_token=False, add_eos_token=False,
+            trust_remote_code=True,
+        )
         model = AutoModelForCausalLM.from_pretrained(
             args.pretrained_model_path,
             device_map='auto',
