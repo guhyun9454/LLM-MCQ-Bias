@@ -44,7 +44,6 @@ def main() -> None:
     models = read_models(Path(args.models_txt))
 
     for model in models:
-        print(f"[RUN] model={model}")
         cmd = [
             args.python,
             "code/eval_clm.py",
