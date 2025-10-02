@@ -53,25 +53,26 @@ def main():
     try:
         toker = AutoTokenizer.from_pretrained(
             args.pretrained_model_path,
-            use_fast=False,
+            use_fast=True,
             add_bos_token=False, add_eos_token=False,
             trust_remote_code=True,
             cache_dir='models',
         )
-        logger.info("Tokenizer loaded with use_fast=False")
-    except Exception as e_slow:
-        logger.warning(f"Failed to load tokenizer with use_fast=False: {e_slow}. Retrying with use_fast=True.")
+        logger.info("Tokenizer loaded with use_fast=True")
+    except Exception as e_fast:
+        logger.warning(f"Failed to load tokenizer with use_fast=True: {e_fast}. Retrying with use_fast=False.")
         try:
             toker = AutoTokenizer.from_pretrained(
                 args.pretrained_model_path,
+                use_fast=False,
                 add_bos_token=False, add_eos_token=False,
                 trust_remote_code=True,
                 cache_dir='models',
             )
-            logger.info("Tokenizer loaded with use_fast=True")
-        except Exception as e_fast:
+            logger.info("Tokenizer loaded with use_fast=False")
+        except Exception as e_slow:
             logger.exception(
-                f"Failed to load tokenizer (use_fast=False/True) for {args.pretrained_model_path}: {e_fast}"
+                f"Failed to load tokenizer (use_fast=True/False) for {args.pretrained_model_path}: {e_slow}"
             )
             return
 
