@@ -50,10 +50,29 @@ def main():
 
     try:
         toker = AutoTokenizer.from_pretrained(
-            args.pretrained_model_path, use_fast=False,
+            args.pretrained_model_path,
+            use_fast=False,
             add_bos_token=False, add_eos_token=False,
             trust_remote_code=True,
         )
+        logger.info("Tokenizer loaded with use_fast=False")
+    except Exception as e_slow:
+        logger.warning(f"Failed to load tokenizer with use_fast=False: {e_slow}. Retrying with use_fast=True.")
+        try:
+            toker = AutoTokenizer.from_pretrained(
+                args.pretrained_model_path,
+                use_fast=True,
+                add_bos_token=False, add_eos_token=False,
+                trust_remote_code=True,
+            )
+            logger.info("Tokenizer loaded with use_fast=True")
+        except Exception as e_fast:
+            logger.exception(
+                f"Failed to load tokenizer (use_fast=False/True) for {args.pretrained_model_path}: {e_fast}"
+            )
+            return
+
+    try:
         model = AutoModelForCausalLM.from_pretrained(
             args.pretrained_model_path,
             device_map='auto',
@@ -61,8 +80,8 @@ def main():
             torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
             trust_remote_code=True,
         )
-    except Exception as e:
-        logger.exception(f"Failed to load model/tokenizer for {args.pretrained_model_path}: {e}")
+    except Exception as e_model:
+        logger.exception(f"Failed to load model for {args.pretrained_model_path}: {e_model}")
         return
     logging_cuda_memory_usage()
 
