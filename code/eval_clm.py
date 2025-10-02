@@ -48,12 +48,15 @@ def main():
     if len(args.eval_names) == 0:
         exit()
 
+    os.makedirs('models', exist_ok=True)
+
     try:
         toker = AutoTokenizer.from_pretrained(
             args.pretrained_model_path,
             use_fast=False,
             add_bos_token=False, add_eos_token=False,
             trust_remote_code=True,
+            cache_dir='models',
         )
         logger.info("Tokenizer loaded with use_fast=False")
     except Exception as e_slow:
@@ -61,9 +64,9 @@ def main():
         try:
             toker = AutoTokenizer.from_pretrained(
                 args.pretrained_model_path,
-                use_fast=True,
                 add_bos_token=False, add_eos_token=False,
                 trust_remote_code=True,
+                cache_dir='models',
             )
             logger.info("Tokenizer loaded with use_fast=True")
         except Exception as e_fast:
@@ -79,6 +82,7 @@ def main():
             use_safetensors=True,
             torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
             trust_remote_code=True,
+            cache_dir='models',
         )
     except Exception as e_model:
         logger.exception(f"Failed to load model for {args.pretrained_model_path}: {e_model}")
