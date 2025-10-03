@@ -10,7 +10,7 @@ def parse_args() -> argparse.Namespace:
                         help="모델 리스트가 줄 단위로 적힌 파일 경로")
     parser.add_argument("--eval_names", type=str, nargs='+', default=["arc,0", "csqa,0"],
                         help="평가 작업 이름 리스트. 예) arc,0 csqa,0 mmlu,0")
-    parser.add_argument("--data_root", type=str, default="../LLM-MCQ-Bias_data",
+    parser.add_argument("--data_root", type=str, default="data",
                         help="데이터 루트 디렉터리 (data_{task}들이 있는 곳)")
     parser.add_argument("--ko", action="store_true",
                         help="한국어 CSV 사용 ( *_dev.ko.csv / *_test.ko.csv )")

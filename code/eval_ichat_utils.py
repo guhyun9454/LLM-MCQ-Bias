@@ -27,7 +27,7 @@ def parse_arguments():
     parser.add_argument("--eval_names", type=str, nargs='+', default=[],
                         help='eval tasks and settings')
     parser.add_argument("--mini", action='store_true')
-    parser.add_argument("--data_root", type=str, default=None,
+    parser.add_argument("--data_root", type=str, default="data",
                         help="Root directory containing data_{task} folders (e.g., 'code' when running from repo root)")
     parser.add_argument("--ko", action='store_true',
                         help="Use Korean CSV files (e.g., *_dev.ko.csv, *_test.ko.csv)")
