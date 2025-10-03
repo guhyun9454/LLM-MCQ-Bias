@@ -25,7 +25,7 @@ for num_shot in 0 5; do
     for task in "mmlu" "arc"; do
         paths=()
         for model in ${models[*]}; do
-            paths[${#paths[*]}]="results_${task}/${num_shot}s_${model}/${task}_perm"
+            paths[${#paths[*]}]="results/${task}/${num_shot}s_${model}/${task}_perm"
         done
         for debias_fn in "simple" "full"; do
             python debias_base.py --task ${task} --load_paths ${paths[*]} --debias_fn ${debias_fn}
@@ -37,7 +37,7 @@ for num_shot in 0 5; do
     for task in "csqa"; do
         paths=()
         for model in ${models[*]}; do
-            paths[${#paths[*]}]="results_${task}/${num_shot}s_${model}/${task}_cyclic"
+            paths[${#paths[*]}]="results/${task}/${num_shot}s_${model}/${task}_cyclic"
         done
         for debias_fn in "simple"; do
             python debias_base.py --task ${task} --load_paths ${paths[*]} --debias_fn ${debias_fn}
@@ -53,7 +53,7 @@ for num_shot in 0 5; do
     for task in "mmlu" "arc" "csqa"; do
         paths=()
         for model in ${models[*]}; do
-            paths[${#paths[*]}]="results_${task}/${num_shot}s_ichat/${task}_cyclic"
+            paths[${#paths[*]}]="results/${task}/${num_shot}s_ichat/${task}_cyclic"
         done
         for debias_fn in "simple"; do
             python debias_base.py --task ${task} --load_paths ${paths[*]} --debias_fn ${debias_fn}

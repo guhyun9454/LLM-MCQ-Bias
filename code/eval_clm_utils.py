@@ -83,7 +83,7 @@ def prepare_eval(args, eval_name):
         moved_answer = setting[-1].upper()
 
     # save_path
-    save_path = f'results_{task}/{num_few_shot}s_{args.model_name}/{task}'
+    save_path = f'results/{task}/{num_few_shot}s_{args.model_name}/{task}'
     if setting is not None:
         save_path += f'_{setting}'
     args.save_path = save_path
