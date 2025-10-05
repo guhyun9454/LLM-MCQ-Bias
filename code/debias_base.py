@@ -98,6 +98,11 @@ def debias_results(debias_fn, load_path, save_path=None, by_category=None):
     record_files = sorted(os.listdir(load_path))
 
     all_priors = []
+    # aggregate counters for terminal summary
+    base_correct_total = 0
+    base_total = 0
+    deb_correct_total = 0
+    deb_total = 0
     for record_file in record_files:
         if not record_file.endswith('.jsonl'):
             continue
@@ -123,10 +128,26 @@ def debias_results(debias_fn, load_path, save_path=None, by_category=None):
 
         for d in data:
             observed, debiased, prior = debias_fn(d['data'][prob_name])
-            num_classes = len(debiased)
+            # determine option ids to use for both baseline and debiased
+            num_classes = observed.shape[1] if hasattr(observed, 'shape') else len(debiased)
             option_ids = _get_option_ids(num_classes)
+
+            # baseline (pre-debias): first probing pass only
+            try:
+                first_pass = observed[0]
+                base_pred = option_ids[int(np.argmax(first_pass))]
+                if base_pred == d['data']['ideal']:
+                    base_correct_total += 1
+                base_total += 1
+            except Exception:
+                pass
+
+            # debiased prediction
             d['data']['sampled'] = option_ids[int(np.argmax(debiased))]
             d['data']['correct'] = (d['data']['sampled'] == d['data']['ideal'])
+            deb_correct_total += int(d['data']['correct'])
+            deb_total += 1
+
             all_priors.append(prior.tolist())
             if 'prompt' in d['data']:
                 d['data'].pop('prompt')
@@ -137,6 +158,20 @@ def debias_results(debias_fn, load_path, save_path=None, by_category=None):
             metrics['data']['accuracy'] = get_accuracy(data)
             metrics['data']['boostrap_std'] = get_bootstrap_accuracy_std(data)
             save_results(f'{save_path}/{record_file}', data, metrics)
+
+    # terminal summary print
+    try:
+        print(f"[Debias Summary] {load_path} -> {save_path if save_path is not None else '(no save)'}")
+        if base_total > 0:
+            print(f"  pre-debias: {base_correct_total/base_total*100:.2f}%  (N={base_total})")
+        else:
+            print("  pre-debias: N/A (no samples)")
+        if deb_total > 0:
+            print(f"  debiased ({args.debias_fn}): {deb_correct_total/deb_total*100:.2f}%  (N={deb_total})")
+        else:
+            print("  debiased: N/A (no samples)")
+    except Exception:
+        pass
 
     return all_priors
 
