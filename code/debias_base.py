@@ -23,6 +23,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--task", type=str, required=True)
 parser.add_argument("--debias_fn", type=str, required=True)
 parser.add_argument("--load_paths", type=str, nargs='+', default=[])
+parser.add_argument("--option_ids4", type=str, default=None,
+                    help="4지선다 옵션 ID를 콤마로 구분해 지정 (예: 'A,B,C,D' 또는 '가,나,다,라')")
+parser.add_argument("--option_ids5", type=str, default=None,
+                    help="5지선다 옵션 ID를 콤마로 구분해 지정 (예: 'A,B,C,D,E' 또는 '가,나,다,라,마')")
 args = parser.parse_args()
 
 if len(args.load_paths) == 0:
@@ -104,9 +108,24 @@ def debias_results(debias_fn, load_path, save_path=None, by_category=None):
         data = [json.loads(line) for line in open(record_path)]
         data = [line for line in data if line['type'] == 'result']
 
+        def _get_option_ids(num_classes):
+            if num_classes == 5 and args.option_ids5 is not None:
+                user_ids = [e.strip() for e in args.option_ids5.split(',')]
+                if len(user_ids) != 5:
+                    raise ValueError(f"--option_ids5 must contain 5 items, got {len(user_ids)}")
+                return user_ids
+            if num_classes == 4 and args.option_ids4 is not None:
+                user_ids = [e.strip() for e in args.option_ids4.split(',')]
+                if len(user_ids) != 4:
+                    raise ValueError(f"--option_ids4 must contain 4 items, got {len(user_ids)}")
+                return user_ids
+            return list('ABCDE') if num_classes == 5 else list('ABCD')
+
         for d in data:
             observed, debiased, prior = debias_fn(d['data'][prob_name])
-            d['data']['sampled'] = 'ABCDE'[np.argmax(debiased)]
+            num_classes = len(debiased)
+            option_ids = _get_option_ids(num_classes)
+            d['data']['sampled'] = option_ids[int(np.argmax(debiased))]
             d['data']['correct'] = (d['data']['sampled'] == d['data']['ideal'])
             all_priors.append(prior.tolist())
             if 'prompt' in d['data']:
