@@ -15,6 +15,8 @@ from utils import (
     save_results,
     patch_open,
 )
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*pynvml.*deprecated.*")
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import BitsAndBytesConfig
