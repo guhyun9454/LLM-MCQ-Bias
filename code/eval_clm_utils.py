@@ -46,6 +46,8 @@ def parse_arguments():
                         help="Comma-separated option IDs for 4-choice tasks (e.g., 'A,B,C,D' or '가,나,다,라' or '1,2,3,4')")
     parser.add_argument("--option_ids5", type=str, default=None,
                         help="Comma-separated option IDs for 5-choice tasks (e.g., 'A,B,C,D,E' or '가,나,다,라,마' or '1,2,3,4,5')")
+    parser.add_argument("--verbose", action='store_true',
+                        help="Print exactly one example prompt that is fed to the model")
     args = parser.parse_args()
 
     args.model_name = args.pretrained_model_path.split('/')[-1]

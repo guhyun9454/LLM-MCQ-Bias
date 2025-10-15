@@ -92,6 +92,8 @@ def main():
         return
     logging_cuda_memory_usage()
 
+    printed_verbose_prompt = False
+
     for eval_name in args.eval_names[::1]:
         (
             subjects, prepare_few_shot_samples, prepare_eval_samples, prepare_eval_fn
@@ -105,6 +107,60 @@ def main():
             few_shot_samples = prepare_few_shot_samples(subject)
             eval_samples = prepare_eval_samples(subject)
             eval_fn = prepare_eval_fn(model, toker, few_shot_samples)
+
+            if getattr(args, 'verbose', False) and not printed_verbose_prompt and len(eval_samples) > 0:
+                try:
+                    # Build exactly the same prompt string fed into the model (for first sample only)
+                    if args.setting in ['perm', 'cyclic']:
+                        probing_inputs, _, _ = eval_samples[0]
+                        sys_msg, eval_sample = probing_inputs[0]
+                        input_text = sys_msg + '\n\n'
+                        if args.num_few_shot > 0:
+                            for s in few_shot_samples[:args.num_few_shot]:
+                                input_text += s + '\n\n'
+                        input_text += eval_sample
+                        # Match eval_fn_perm behavior for BPE space prefix
+                        try:
+                            id_space = toker.encode(': A', add_special_tokens=False)[-1]
+                            id_nospace = toker.encode(':A', add_special_tokens=False)[-1]
+                            bpe_has_space_prefix = (id_space != id_nospace)
+                        except Exception:
+                            bpe_has_space_prefix = True
+                        if not bpe_has_space_prefix:
+                            input_text += ' '
+                    elif args.setting in ['noid']:
+                        inputs, _, _ = eval_samples[0]
+                        sys_msg, eval_sample = inputs
+                        input_text = sys_msg + '\n\n'
+                        if args.num_few_shot > 0:
+                            for s in few_shot_samples[:args.num_few_shot]:
+                                input_text += s + '\n\n'
+                        input_text += eval_sample
+                        # no extra space in noid eval
+                    else:
+                        inputs, _, _ = eval_samples[0]
+                        sys_msg, eval_sample = inputs
+                        input_text = sys_msg + '\n\n'
+                        if args.num_few_shot > 0:
+                            for s in few_shot_samples[:args.num_few_shot]:
+                                input_text += s + '\n\n'
+                        input_text += eval_sample
+                        # Match eval_fn_base behavior for BPE space prefix
+                        try:
+                            id_space = toker.encode(': A', add_special_tokens=False)[-1]
+                            id_nospace = toker.encode(':A', add_special_tokens=False)[-1]
+                            bpe_has_space_prefix = (id_space != id_nospace)
+                        except Exception:
+                            bpe_has_space_prefix = True
+                        if not bpe_has_space_prefix:
+                            input_text += ' '
+
+                    logger.info(_purple("====== VERBOSE: Example prompt fed to model (first sample) ======"))
+                    logger.info(input_text)
+                    logger.info(_purple("========================= END OF PROMPT ========================="))
+                    printed_verbose_prompt = True
+                except Exception as e:
+                    logger.warning(f"Failed to build verbose prompt example: {e}")
 
             logger.info(_blue(f"Run started: {subject}"))
             results = eval_all_samples(
