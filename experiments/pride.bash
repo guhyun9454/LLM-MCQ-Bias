@@ -76,7 +76,7 @@ run_one() {
   local opt5="$5"
 
   echo "=== Running: model=$model | lang=$lang | variant=$variant ==="
-  python ../code/eval_clm.py \
+  python code/eval_clm.py \
     --pretrained_model_path "$model" \
     --eval_names "${EVAL_NAMES[@]}" \
     $(lang_flags "$lang") \
