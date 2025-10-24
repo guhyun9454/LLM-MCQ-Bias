@@ -11,6 +11,21 @@ import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
+
+# Early register bundled Korean font BEFORE importing pyplot/seaborn
+from matplotlib import font_manager as _fm
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_bundled_font = os.path.join(_repo_root, "font", "NanumGothic.ttf")
+if os.path.isfile(_bundled_font):
+    _fm.fontManager.addfont(_bundled_font)
+    try:
+        _font_name = _fm.FontProperties(fname=_bundled_font).get_name()
+    except Exception:
+        _font_name = "NanumGothic"
+    matplotlib.rcParams["font.family"] = _font_name
+    matplotlib.rcParams["font.sans-serif"] = [_font_name]
+    matplotlib.rcParams["axes.unicode_minus"] = False
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -223,35 +238,55 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
     # Prepare common plotting DataFrame with Korean labels
     plot_df = df.assign(정답여부=df["correct"].map({True: "정답", False: "오답"}))
 
+    # Prepare font properties using bundled font
+    from matplotlib.font_manager import FontProperties
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    bundled_font = os.path.join(repo_root, "font", "NanumGothic.ttf")
+    font_prop = FontProperties(fname=bundled_font)
+
+    def apply_korean_font(ax):
+        ax.title.set_fontproperties(font_prop)
+        ax.xaxis.label.set_fontproperties(font_prop)
+        ax.yaxis.label.set_fontproperties(font_prop)
+        for tick in ax.get_xticklabels() + ax.get_yticklabels():
+            tick.set_fontproperties(font_prop)
+        leg = ax.get_legend()
+        if leg is not None:
+            for text in leg.get_texts():
+                text.set_fontproperties(font_prop)
+
     # Histogram
-    plt.figure(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
     sns.histplot(data=plot_df, x="confidence", hue="정답여부",
-                 bins=20, stat="density", common_norm=False, alpha=0.5, palette=["#1f77b4", "#d62728"])
-    plt.title(f"{title_prefix} - 정답/오답별 확률 분포 (히스토그램)")
-    plt.xlabel("Confidence (선택 확률)")
-    plt.ylabel("밀도")
+                 bins=20, stat="density", common_norm=False, alpha=0.5,
+                 palette=["#1f77b4", "#d62728"], ax=ax)
+    ax.set_title(f"{title_prefix} - 정답/오답별 확률 분포 (히스토그램)", fontproperties=font_prop)
+    ax.set_xlabel("Confidence (선택 확률)", fontproperties=font_prop)
+    ax.set_ylabel("밀도", fontproperties=font_prop)
+    apply_korean_font(ax)
     hist_path = os.path.join(save_dir, "histogram.png")
-    plt.tight_layout()
-    plt.savefig(hist_path, dpi=200)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(hist_path, dpi=200)
+    plt.close(fig)
     file_paths["histogram"] = hist_path
 
     # Boxplot
-    plt.figure(figsize=(7, 5))
-    sns.boxplot(data=plot_df, x="정답여부", y="confidence")
-    sns.stripplot(data=plot_df, x="정답여부", y="confidence", color="black", size=2, alpha=0.25)
-    plt.ylim(0, 1)
-    plt.title(f"{title_prefix} - 정답/오답별 Confidence 박스플롯")
-    plt.xlabel("")
-    plt.ylabel("Confidence")
+    fig, ax = plt.subplots(figsize=(7, 5))
+    sns.boxplot(data=plot_df, x="정답여부", y="confidence", ax=ax)
+    sns.stripplot(data=plot_df, x="정답여부", y="confidence", color="black", size=2, alpha=0.25, ax=ax)
+    ax.set_ylim(0, 1)
+    ax.set_title(f"{title_prefix} - 정답/오답별 Confidence 박스플롯", fontproperties=font_prop)
+    ax.set_xlabel("", fontproperties=font_prop)
+    ax.set_ylabel("Confidence", fontproperties=font_prop)
+    apply_korean_font(ax)
     box_path = os.path.join(save_dir, "boxplot.png")
-    plt.tight_layout()
-    plt.savefig(box_path, dpi=200)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(box_path, dpi=200)
+    plt.close(fig)
     file_paths["boxplot"] = box_path
 
     # Scatter by index (ID)
-    plt.figure(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(10, 4))
     sorted_df = df.copy()
     # Normalize types for robust sorting
     sorted_df["subject"] = sorted_df["subject"].astype(str)
@@ -259,34 +294,36 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
     sorted_df = sorted_df.sort_values(["subject", "idx"], na_position="first").reset_index(drop=True)
     x_vals = np.arange(len(sorted_df))
     colors = sorted_df["correct"].map({True: "#1f77b4", False: "#d62728"}).to_numpy()
-    plt.scatter(x_vals, sorted_df["confidence"].to_numpy(), c=colors, s=8, alpha=0.7)
-    plt.ylim(0, 1)
-    plt.xlabel("샘플 ID (정렬됨)")
-    plt.ylabel("Confidence")
-    plt.title(f"{title_prefix} - ID별 Confidence 분포")
+    ax.scatter(x_vals, sorted_df["confidence"].to_numpy(), c=colors, s=8, alpha=0.7)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("샘플 ID (정렬됨)", fontproperties=font_prop)
+    ax.set_ylabel("Confidence", fontproperties=font_prop)
+    ax.set_title(f"{title_prefix} - ID별 Confidence 분포", fontproperties=font_prop)
+    apply_korean_font(ax)
     scatter_path = os.path.join(save_dir, "id_scatter.png")
-    plt.tight_layout()
-    plt.savefig(scatter_path, dpi=200)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(scatter_path, dpi=200)
+    plt.close(fig)
     file_paths["id_scatter"] = scatter_path
 
     # Reliability diagram
     bins, bin_acc, bin_conf = reliability_curve(df)
     centers = 0.5 * (bins[:-1] + bins[1:])
-    plt.figure(figsize=(6, 6))
-    plt.plot([0, 1], [0, 1], linestyle="--", color="#888888", label="완전 보정")
-    plt.plot(centers, bin_acc, marker="o", label="관측 정답률")
-    plt.plot(centers, bin_conf, marker="s", label="평균 Confidence")
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.xlabel("Confidence bin 중심값")
-    plt.ylabel("값")
-    plt.title(f"{title_prefix} - 신뢰도 곡선")
-    plt.legend()
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.plot([0, 1], [0, 1], linestyle="--", color="#888888", label="완전 보정")
+    ax.plot(centers, bin_acc, marker="o", label="관측 정답률")
+    ax.plot(centers, bin_conf, marker="s", label="평균 Confidence")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Confidence bin 중심값", fontproperties=font_prop)
+    ax.set_ylabel("값", fontproperties=font_prop)
+    ax.set_title(f"{title_prefix} - 신뢰도 곡선", fontproperties=font_prop)
+    leg = ax.legend()
+    apply_korean_font(ax)
     reliability_path = os.path.join(save_dir, "reliability.png")
-    plt.tight_layout()
-    plt.savefig(reliability_path, dpi=200)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(reliability_path, dpi=200)
+    plt.close(fig)
     file_paths["reliability"] = reliability_path
 
     # W&B logging
@@ -315,15 +352,10 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
 
 def init_wandb(project: str, run_name: str, group: Optional[str], tags: List[str], config: Dict) -> Tuple[bool, Optional[object]]:
     """Try to initialize a W&B run. If login fails, return (False, None)."""
-    try:
-        import wandb
-        # Respect existing env; don't force login prompt in non-interactive.
-        # If WANDB_API_KEY isn't set, this may still work in anonymous or offline modes.
-        settings = wandb.Settings(start_method="thread")
-        run = wandb.init(entitiy = "capde", project=project, name=run_name, group=group, tags=tags, config=config, settings=settings, reinit=True)
-        return True, run
-    except Exception:
-        return False, None
+    import wandb
+    run = wandb.init(entity = "capde", project=project, name=run_name, group=group, tags=tags, config=config, reinit=True)
+    return True, run
+
 
 
 def analyze_one_run(run: RunKey, wandb_project: str, save_root: str, enable_wandb: bool) -> Optional[Dict[str, str]]:
@@ -388,7 +420,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    configure_korean_fonts()
+    # 폰트는 이미 모듈 임포트 시점에 rcParams에 등록됨. 스타일만 적용.
     sns.set(style="whitegrid")
 
     run_keys = find_result_runs(args.roots)
