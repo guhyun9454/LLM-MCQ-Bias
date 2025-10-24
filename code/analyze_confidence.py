@@ -16,32 +16,20 @@ import seaborn as sns
 
 
 def configure_korean_fonts() -> None:
-    """Best-effort: configure fonts so Korean text renders correctly."""
+    """Use only the repo-bundled font at font/NanumGothic.ttf without fallbacks."""
     import matplotlib.font_manager as fm
-    candidate_fonts = [
-        "Malgun Gothic",  # Windows
-        "NanumGothic",
-        "Noto Sans CJK KR",
-        "Noto Sans KR",
-        "AppleGothic",    # macOS
-        "Source Han Sans K",
-        "Source Han Sans KR",
-        "Batang",
-        "Gulim",
-        "Dotum",
-        "DejaVu Sans",    # fallback
-    ]
-    system_fonts = set(f.name for f in fm.fontManager.ttflist)
-    selected = None
-    for name in candidate_fonts:
-        if name in system_fonts:
-            selected = name
-            break
-    if selected is None:
-        selected = "DejaVu Sans"
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    bundled_font = os.path.join(repo_root, "font", "NanumGothic.ttf")
+    if not os.path.isfile(bundled_font):
+        raise FileNotFoundError(f"한글 폰트를 찾을 수 없습니다: {bundled_font}")
+    fm.fontManager.addfont(bundled_font)
+    try:
+        selected = fm.FontProperties(fname=bundled_font).get_name()
+    except Exception:
+        selected = "NanumGothic"
+
     plt.rcParams["font.family"] = selected
     plt.rcParams["font.sans-serif"] = [selected]
-    # minus sign rendering
     plt.rcParams["axes.unicode_minus"] = False
 
 
@@ -134,7 +122,13 @@ def load_results_from_dir(dir_path: str) -> List[dict]:
                         continue
                     if obj.get("type") != "result":
                         continue
-                    entries.append(obj.get("data", {}))
+                    data = obj.get("data", {})
+                    # Fill subject from filename if missing
+                    if data.get("subject") in (None, ""):
+                        inferred = os.path.splitext(name)[0]
+                        data = dict(data)
+                        data["subject"] = inferred
+                    entries.append(data)
         except FileNotFoundError:
             continue
     # Sort by subject (implicit via filename) then idx
@@ -226,9 +220,12 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
     os.makedirs(save_dir, exist_ok=True)
     file_paths: Dict[str, str] = {}
 
+    # Prepare common plotting DataFrame with Korean labels
+    plot_df = df.assign(정답여부=df["correct"].map({True: "정답", False: "오답"}))
+
     # Histogram
     plt.figure(figsize=(8, 5))
-    sns.histplot(data=df, x="confidence", hue=df["correct"].map({True: "정답", False: "오답"}),
+    sns.histplot(data=plot_df, x="confidence", hue="정답여부",
                  bins=20, stat="density", common_norm=False, alpha=0.5, palette=["#1f77b4", "#d62728"])
     plt.title(f"{title_prefix} - 정답/오답별 확률 분포 (히스토그램)")
     plt.xlabel("Confidence (선택 확률)")
@@ -241,8 +238,7 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
 
     # Boxplot
     plt.figure(figsize=(7, 5))
-    plot_df = df.assign(정답여부=df["correct"].map({True: "정답", False: "오답"}))
-    sns.boxplot(data=plot_df, x="정답여부", y="confidence", palette=["#1f77b4", "#d62728"])
+    sns.boxplot(data=plot_df, x="정답여부", y="confidence")
     sns.stripplot(data=plot_df, x="정답여부", y="confidence", color="black", size=2, alpha=0.25)
     plt.ylim(0, 1)
     plt.title(f"{title_prefix} - 정답/오답별 Confidence 박스플롯")
@@ -256,7 +252,11 @@ def plot_and_log(df: pd.DataFrame, title_prefix: str, save_dir: str, use_wandb: 
 
     # Scatter by index (ID)
     plt.figure(figsize=(10, 4))
-    sorted_df = df.sort_values([df["subject"].astype(str), "idx"], na_position="first").reset_index(drop=True)
+    sorted_df = df.copy()
+    # Normalize types for robust sorting
+    sorted_df["subject"] = sorted_df["subject"].astype(str)
+    sorted_df["idx"] = pd.to_numeric(sorted_df["idx"], errors="coerce")
+    sorted_df = sorted_df.sort_values(["subject", "idx"], na_position="first").reset_index(drop=True)
     x_vals = np.arange(len(sorted_df))
     colors = sorted_df["correct"].map({True: "#1f77b4", False: "#d62728"}).to_numpy()
     plt.scatter(x_vals, sorted_df["confidence"].to_numpy(), c=colors, s=8, alpha=0.7)
