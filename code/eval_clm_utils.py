@@ -145,8 +145,10 @@ def parse_arguments():
     parser.add_argument("--empirical_logit_delta", type=float, default=1e-12,
                         help="Stabilization delta used when converting PriDe priors to centered logits.")
     parser.add_argument("--empirical_residual_model", type=str, default="logistic_normal",
-                        choices=["logistic_normal", "empirical"],
-                        help="Residual prior model for empirical PriDe. logistic_normal uses Gaussian residual Monte Carlo; empirical reuses the residual bank directly (legacy).")
+                        choices=["logistic_normal", "empirical", "identify"],
+                        help="Residual prior model for empirical PriDe. logistic_normal uses Gaussian residual Monte Carlo; empirical reuses the residual bank directly (legacy); identify estimates the current question's own residual from its observed views once >=3 views are available (mu-only before that).")
+    parser.add_argument("--empirical_ident_shrink", type=float, default=1.0,
+                        help="Shrinkage factor for the identified per-question residual (identify mode only): the posterior correction uses mu + s*eps_hat(q). 1.0 = raw LS estimate.")
     parser.add_argument("--empirical_mc_samples", type=int, default=64,
                         help="Number of Monte Carlo residual samples for logistic-normal empirical PriDe.")
     parser.add_argument("--empirical_cov_shrinkage", type=float, default=0.1,

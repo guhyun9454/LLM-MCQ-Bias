@@ -669,6 +669,44 @@ def _select_best_relative_cyclic_sequence(
     }
 
 
+_EMPIRICAL_RESIDUAL_IDENT = False
+_EMPIRICAL_RESIDUAL_IDENT_SHRINK = 1.0
+
+
+def _identify_question_residual(
+    stage_probs: np.ndarray,
+    slot_to_content_schedule: List[Tuple[int, ...]],
+    mu_hat: np.ndarray,
+    logit_clip: float = 1e-6,
+) -> np.ndarray:
+    """
+    LS-estimate this question's own residual eps(q) from its observed views.
+
+    Model (centered logits, slot space): y_t = b + A_t c, b = mu + eps(q),
+    A_t[slot, content] = 1 iff schedule[t][slot] == content. View differences
+    y_0 - y_t = (A_0 - A_t) c cancel b; c is solved on the zero-sum subspace
+    (pinv), then eps(q) = mean_t(y_t - A_t c) - mu_hat. Identified (rank k-1)
+    from 3 views under the production targeted-latin schedules.
+    """
+    arr = np.asarray(stage_probs, dtype=np.float64)
+    n_views, k = arr.shape
+    ys = np.log(np.clip(arr, logit_clip, None))
+    ys = ys - ys.mean(axis=1, keepdims=True)
+    As = []
+    for perm in slot_to_content_schedule[:n_views]:
+        A = np.zeros((k, k), dtype=np.float64)
+        for slot_idx, content_idx in enumerate(perm):
+            A[slot_idx, int(content_idx)] = 1.0
+        As.append(A)
+    M = np.vstack([As[0] - A for A in As[1:]])
+    rhs = np.concatenate([ys[0] - y for y in ys[1:]])
+    c = np.linalg.pinv(M) @ rhs
+    c -= c.mean()
+    b = np.mean([y - A @ c for y, A in zip(ys, As)], axis=0)
+    b -= b.mean()
+    return b - np.asarray(mu_hat, dtype=np.float64).reshape(-1)
+
+
 def _compute_empirical_stage_posteriors(
     stage_probs: np.ndarray,
     slot_to_content_schedule: List[Tuple[int, ...]],
@@ -694,8 +732,19 @@ def _compute_empirical_stage_posteriors(
     conf_by_stage: List[float] = []
 
     for stage_idx in range(len(slot_to_content_schedule)):
+        stage_residuals = residuals
+        if _EMPIRICAL_RESIDUAL_IDENT:
+            if stage_idx + 1 >= 3:
+                stage_residuals = (
+                    _EMPIRICAL_RESIDUAL_IDENT_SHRINK
+                    * _identify_question_residual(
+                        probs[: stage_idx + 1], slot_to_content_schedule[: stage_idx + 1], mu
+                    )
+                ).reshape(1, -1)
+            else:
+                stage_residuals = np.zeros((1, k), dtype=np.float64)
         per_residual = []
-        for residual in residuals:
+        for residual in stage_residuals:
             scores = np.zeros((k,), dtype=np.float64)
             prior_factor = np.exp(-(mu + residual))
             for inner_idx in range(stage_idx + 1):
@@ -2994,6 +3043,8 @@ def _run_api_adaptive(args, model, wandb_ok=False, wandb_run=None):
                         probs_bank, list(range(k)), k, alpha / 100.0, seed,
                         args.empirical_logit_delta,
                     )
+                if args.empirical_residual_model == "identify":
+                    residual_bank = np.zeros((1, k), dtype=np.float64)
                 if set(int(x) for x in prior_meta.get("prefix_ids", [])) != prefix_ids:
                     raise RuntimeError("adaptive prefix selection diverged from the PriDe estimator")
 
@@ -3167,6 +3218,11 @@ def main():
     hf_logging.set_verbosity_error()
 
     args = parse_arguments()
+    global _EMPIRICAL_RESIDUAL_IDENT, _EMPIRICAL_RESIDUAL_IDENT_SHRINK
+    _EMPIRICAL_RESIDUAL_IDENT = (
+        str(getattr(args, "empirical_residual_model", "")).strip().lower() == "identify"
+    )
+    _EMPIRICAL_RESIDUAL_IDENT_SHRINK = float(getattr(args, "empirical_ident_shrink", 1.0))
     if len(getattr(args, "eval_names", [])) == 0:
         return
 
@@ -3917,7 +3973,7 @@ def main():
                         if empirical_percentile_mode not in {"online", "fixed_prefix"}:
                             empirical_percentile_mode = "online"
                         empirical_residual_model = str(getattr(args, "empirical_residual_model", "logistic_normal")).strip().lower()
-                        if empirical_residual_model not in {"logistic_normal", "empirical"}:
+                        if empirical_residual_model not in {"logistic_normal", "empirical", "identify"}:
                             empirical_residual_model = "logistic_normal"
                         empirical_stage_schedule = str(getattr(args, "empirical_stage_schedule", "sqrt")).strip().lower()
                         if empirical_stage_schedule not in {"flat", "sqrt"}:
@@ -4227,6 +4283,11 @@ def main():
                                         logit_delta=empirical_logit_delta,
                                     )
                                     empirical_covariance = np.zeros((k, k), dtype=np.float64)
+                                if empirical_residual_model == "identify":
+                                    # bank unused; the per-question residual is estimated per
+                                    # stage inside _compute_empirical_stage_posteriors
+                                    # (mu-only before 3 views).
+                                    empirical_residual_bank = np.zeros((1, k), dtype=np.float64)
                                 empirical_prefix_ids = set(int(x) for x in (empirical_meta.get("prefix_ids") or []))
                                 empirical_stage_cache_path = _empirical_stage_cache_path(
                                     args,
