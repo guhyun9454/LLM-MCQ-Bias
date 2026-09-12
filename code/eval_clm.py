@@ -667,6 +667,7 @@ def _select_best_relative_cyclic_sequence(
 _EMPIRICAL_RESIDUAL_WEIGHTING = "uniform"
 _EMPIRICAL_RESIDUAL_IDENT = False
 _EMPIRICAL_RESIDUAL_IDENT_SHRINK = 1.0
+_EMPIRICAL_RESIDUAL_IDENT_PROJECT = False
 
 
 def _identify_question_residual(
@@ -674,6 +675,7 @@ def _identify_question_residual(
     slot_to_content_schedule: List[Tuple[int, ...]],
     mu_hat: np.ndarray,
     logit_clip: float = 1e-6,
+    project: bool = False,
 ) -> np.ndarray:
     """
     LS-estimate this question's own residual eps(q) from its observed views.
@@ -683,6 +685,14 @@ def _identify_question_residual(
     y_0 - y_t = (A_0 - A_t) c cancel b; c is solved on the zero-sum subspace
     (pinv), then eps(q) = mean_t(y_t - A_t c) - mu_hat. Identified (rank k-1)
     from 3 views under the production targeted-latin schedules.
+
+    project=True additionally handles the rank-deficient case (2 views): the
+    min-norm pinv solution leaks the content component along ker(M) into b,
+    and that leakage lies *exactly* along ker(M) (since A_t v = v for v in the
+    kernel of the stage-2 double-transposition). Projecting eps onto the
+    identified subspace removes it exactly, yielding the (k-2)-dim component
+    of eps(q) with no content leakage. At >=3 views M is full rank and the
+    projection is a no-op, so results match plain identify bit-for-bit.
     """
     arr = np.asarray(stage_probs, dtype=np.float64)
     n_views, k = arr.shape
@@ -700,7 +710,33 @@ def _identify_question_residual(
     c -= c.mean()
     b = np.mean([y - A @ c for y, A in zip(ys, As)], axis=0)
     b -= b.mean()
-    return b - np.asarray(mu_hat, dtype=np.float64).reshape(-1)
+    eps = b - np.asarray(mu_hat, dtype=np.float64).reshape(-1)
+    if project:
+        eps = _project_onto_identified(eps, M, k)
+    return eps
+
+
+def _project_onto_identified(eps: np.ndarray, M: np.ndarray, k: int) -> np.ndarray:
+    """
+    Drop the components of eps that the view-difference system cannot identify.
+
+    The identifiable subspace is row-space(M) restricted to the zero-sum
+    subspace; ker(M) on that subspace carries pure content leakage (see
+    _identify_question_residual). Full-rank M => returns eps unchanged.
+    """
+    Q = np.eye(k, dtype=np.float64) - np.ones((k, k), dtype=np.float64) / float(k)
+    MQ = np.asarray(M, dtype=np.float64) @ Q
+    _, sv, Vt = np.linalg.svd(MQ)
+    tol = 1e-9 * max(1.0, float(sv[0]) if sv.size else 1.0)
+    rank = int((sv > tol).sum())
+    if rank >= k - 1:
+        return eps
+    null_dirs = Q @ Vt[rank:].T                      # zero-sum part of ker(MQ)
+    Un, sn, _ = np.linalg.svd(null_dirs, full_matrices=False)
+    N = Un[:, sn > tol]
+    if N.size == 0:
+        return eps
+    return eps - N @ (N.T @ eps)
 
 
 def _compute_empirical_stage_posteriors(
@@ -730,11 +766,13 @@ def _compute_empirical_stage_posteriors(
     for stage_idx in range(len(slot_to_content_schedule)):
         stage_residuals = residuals
         if _EMPIRICAL_RESIDUAL_IDENT:
-            if stage_idx + 1 >= 3:
+            min_views = 2 if _EMPIRICAL_RESIDUAL_IDENT_PROJECT else 3
+            if stage_idx + 1 >= min_views:
                 stage_residuals = (
                     _EMPIRICAL_RESIDUAL_IDENT_SHRINK
                     * _identify_question_residual(
-                        probs[: stage_idx + 1], slot_to_content_schedule[: stage_idx + 1], mu
+                        probs[: stage_idx + 1], slot_to_content_schedule[: stage_idx + 1], mu,
+                        project=_EMPIRICAL_RESIDUAL_IDENT_PROJECT,
                     )
                 ).reshape(1, -1)
             else:
@@ -3200,12 +3238,14 @@ def main():
 
     args = parse_arguments()
     global _EMPIRICAL_RESIDUAL_WEIGHTING, _EMPIRICAL_RESIDUAL_IDENT, _EMPIRICAL_RESIDUAL_IDENT_SHRINK
+    global _EMPIRICAL_RESIDUAL_IDENT_PROJECT
     _EMPIRICAL_RESIDUAL_WEIGHTING = str(
         getattr(args, "empirical_residual_weighting", "uniform")).strip().lower()
     _EMPIRICAL_RESIDUAL_IDENT = (
         str(getattr(args, "empirical_residual_model", "")).strip().lower() == "identify"
     )
     _EMPIRICAL_RESIDUAL_IDENT_SHRINK = float(getattr(args, "empirical_ident_shrink", 1.0))
+    _EMPIRICAL_RESIDUAL_IDENT_PROJECT = bool(getattr(args, "empirical_ident_project", False))
     if len(getattr(args, "eval_names", [])) == 0:
         return
 
